@@ -15,7 +15,7 @@ interface ChatBubbleProps {
 
 export function ChatBubble({
   variant = "received",
-  layout = "default",
+
   className,
   children,
 }: ChatBubbleProps) {
@@ -48,7 +48,7 @@ export function ChatBubbleMessage({
   return (
     <div
       className={cn(
-        "rounded-[1.25rem] px-4 py-2 text-sm max-w-[85%]",
+        "rounded-[1.25rem] px-4 py-2 text-sm max-w-[85%] break-words",
         variant === "sent" ? "bg-primary text-primary-foreground" : "bg-muted",
         className
       )}
