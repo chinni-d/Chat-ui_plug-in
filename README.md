@@ -76,23 +76,6 @@ The `ChatUI` component provides various props to customize the appearance and be
 />
 ```
 
-## 🔌 API Endpoint Requirements
-
-Your backend endpoint should accept a POST request with the following JSON body:
-
-```json
-{
-  "query": "User's message",
-  "history": [
-    { "role": "user", "content": "previous message" },
-    { "role": "assistant", "content": "response" }
-  ],
-  "stream": true
-}
-```
-
-And it should return a server-sent events (SSE) stream or a readable stream of text.
-
 
 ## 🧠 Configure RAG Pipeline
 
