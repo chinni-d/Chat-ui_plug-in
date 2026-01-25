@@ -21,8 +21,8 @@ const chatConfig = {
     "bottom-left": "bottom-5 left-5",
   },
   chatPositions: {
-    "bottom-right": "sm:bottom-[calc(100%+10px)] sm:right-0",
-    "bottom-left": "sm:bottom-[calc(100%+10px)] sm:left-0",
+    "bottom-right": "sm:right-5 sm:bottom-24",
+    "bottom-left": "sm:left-5 sm:bottom-24",
   },
   states: {
     open: "pointer-events-auto opacity-100 visible scale-100 translate-y-0",
@@ -31,12 +31,21 @@ const chatConfig = {
   },
 };
 
+const sizeConfig = {
+  sm: { width: "min(90vw, 24rem)", height: "min(80vh, 500px)" },
+  md: { width: "min(90vw, 28rem)", height: "min(80vh, 600px)" },
+  lg: { width: "min(90vw, 32rem)", height: "min(80vh, 700px)" },
+  xl: { width: "min(90vw, 36rem)", height: "min(80vh, 800px)" },
+  full: { width: "100%", height: "100%" },
+};
+
 interface ExpandableChatProps extends React.HTMLAttributes<HTMLDivElement> {
   position?: ChatPosition;
   size?: ChatSize;
   icon?: React.ReactNode;
   isOpen?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
+  isMaximized?: boolean;
 }
 
 const ExpandableChat: React.FC<ExpandableChatProps> = ({
@@ -47,6 +56,7 @@ const ExpandableChat: React.FC<ExpandableChatProps> = ({
   children,
   isOpen: controlledIsOpen,
   onOpenChange,
+  isMaximized,
   ...props
 }) => {
   const [internalIsOpen, setInternalIsOpen] = useState(false);
@@ -70,11 +80,20 @@ const ExpandableChat: React.FC<ExpandableChatProps> = ({
     >
       <div
         ref={chatRef}
+        style={{
+          "--chat-width": isMaximized ? "60vw" : sizeConfig[size].width,
+          "--chat-height": isMaximized ? "90vh" : sizeConfig[size].height,
+          "--chat-right": isMaximized ? "20vw" : "1.25rem", // 1.25rem = right-5
+          "--chat-bottom": isMaximized ? "5vh" : "6rem",    // 6rem = bottom-24
+          transition: "width 0.4s ease-in-out, height 0.4s ease-in-out, right 0.4s ease-in-out, bottom 0.4s ease-in-out",
+        } as React.CSSProperties}
         className={cn(
-          "flex flex-col bg-background sm:rounded-lg shadow-md overflow-hidden transition-all duration-250 ease-out sm:absolute sm:w-[90vw] sm:h-[80vh] fixed inset-0 w-full h-full sm:inset-auto",
-          chatConfig.chatPositions[position],
+          "flex flex-col bg-background sm:rounded-lg shadow-md overflow-hidden fixed inset-0 w-full h-full sm:inset-auto sm:left-auto sm:top-auto",
+          chatConfig.chatPositions[position], 
           chatConfig.dimensions[size],
           isOpen ? chatConfig.states.open : chatConfig.states.closed,
+          "sm:w-[var(--chat-width)] sm:h-[var(--chat-height)] sm:right-[var(--chat-right)] sm:bottom-[var(--chat-bottom)]",
+          isMaximized ? "sm:!max-w-none sm:!max-h-none" : "",
           className,
         )}
       >
@@ -143,7 +162,7 @@ const ExpandableChatToggle: React.FC<ExpandableChatToggleProps> = ({
     variant="default"
     onClick={toggleChat}
     className={cn(
-      "w-16 h-16 rounded-full shadow-md flex items-center justify-center hover:shadow-lg hover:shadow-black/30 transition-all duration-300 p-0 ring-0",
+      "w-16 h-16 rounded-full shadow-md flex items-center justify-center hover:shadow-lg hover:shadow-black/30 transition-all duration-300 p-0 ring-0 hover:scale-110 active:scale-95",
       !isOpen ? "!bg-transparent !border-0" : "",
       className,
     )}

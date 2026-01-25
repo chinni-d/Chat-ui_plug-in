@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, FormEvent, useEffect } from "react";
-import { Send, Sparkles, Loader2, User, RefreshCcw, X, Copy, CheckCheck, Check } from "lucide-react";
+import { Send, Sparkles, Loader2, User, RefreshCcw, X, Copy, CheckCheck, Check, Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import {
   ChatBubble,
@@ -81,6 +81,7 @@ export function ChatUI({
   }, []);
 
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
 
@@ -316,6 +317,7 @@ export function ChatUI({
         position="bottom-right"
         isOpen={isChatOpen}
         onOpenChange={setIsChatOpen}
+        isMaximized={isMaximized}
         icon={
           <div className="relative h-full w-full overflow-hidden rounded-full">
             <img
@@ -338,19 +340,32 @@ export function ChatUI({
             <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
             Online and ready to help
           </p>
-          <Tooltip
-            text="Reset Chat"
-            className="absolute top-3 left-3 sm:top-5 sm:right-5 sm:left-auto"
-          >
-            <Button
-              variant="ghost"
-              size="icon"
-              className="group h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              onClick={handleReset}
-            >
-              <RefreshCcw className="h-4 w-4 group-hover:animate-[spin_1s_linear_1]" />
-            </Button>
-          </Tooltip>
+          <div className="absolute top-3 left-3 flex items-center gap-1 sm:top-5 sm:right-5 sm:left-auto">
+             <Tooltip text={isMaximized ? "Minimize" : "Maximize"}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hidden sm:flex h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                onClick={() => setIsMaximized(!isMaximized)}
+              >
+                {isMaximized ? (
+                  <Minimize2 className="h-4 w-4" />
+                ) : (
+                  <Maximize2 className="h-4 w-4" />
+                )}
+              </Button>
+            </Tooltip>
+            <Tooltip text="Reset Chat">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="group h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                onClick={handleReset}
+              >
+                <RefreshCcw className="h-4 w-4 group-hover:animate-[spin_1s_linear_1]" />
+              </Button>
+            </Tooltip>
+          </div>
         </ExpandableChatHeader>
 
         <ExpandableChatBody className="bg-background/50 bg-[radial-gradient(hsl(var(--chat-border))_1px,transparent_1px)] [background-size:16px_16px]">
@@ -382,6 +397,7 @@ export function ChatUI({
 
                     <ChatBubble
                       variant={message.role === "user" ? "sent" : "received"}
+                      className={cn(isMaximized && "gap-4")}
                     >
                       <ChatBubbleAvatar
                         className="h-8 w-8 shrink-0"
@@ -397,7 +413,15 @@ export function ChatUI({
                       <div className={cn("flex flex-col gap-1 max-w-[85%]", message.role === "user" ? "items-end" : "items-start")}>
                         <ChatBubbleMessage
                           variant={message.role === "user" ? "sent" : "received"}
-                          className="max-w-full"
+                          className={cn(
+                            "max-w-full",
+                            message.role === "user"
+                              ? cn(
+                                  "!px-3 !py-2 rounded-2xl border border-border/10 shadow-sm !text-[hsl(var(--chat-foreground))]",
+                                  theme === "dark" ? "!bg-white/10" : "!bg-black/5"
+                                )
+                              : "!bg-transparent !text-[hsl(var(--chat-foreground))] !px-0 !py-0"
+                          )}
                         >
                           {message.role === "user" ? (
                             message.content
