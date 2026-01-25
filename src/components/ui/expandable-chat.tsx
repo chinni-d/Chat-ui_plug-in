@@ -90,10 +90,9 @@ const ExpandableChat: React.FC<ExpandableChatProps> = ({
         className={cn(
           "flex flex-col bg-background sm:rounded-lg shadow-md overflow-hidden fixed inset-0 w-full h-full sm:inset-auto sm:left-auto sm:top-auto",
           chatConfig.chatPositions[position], 
-          chatConfig.dimensions[size],
           isOpen ? chatConfig.states.open : chatConfig.states.closed,
           "sm:w-[var(--chat-width)] sm:h-[var(--chat-height)] sm:right-[var(--chat-right)] sm:bottom-[var(--chat-bottom)]",
-          isMaximized ? "sm:!max-w-none sm:!max-h-none" : "",
+          "sm:!max-w-none sm:!max-h-none", // Always apply this to prevent any other max-w interference
           className,
         )}
       >
@@ -162,7 +161,7 @@ const ExpandableChatToggle: React.FC<ExpandableChatToggleProps> = ({
     variant="default"
     onClick={toggleChat}
     className={cn(
-      "w-16 h-16 rounded-full shadow-md flex items-center justify-center hover:shadow-lg hover:shadow-black/30 transition-all duration-300 p-0 ring-0 hover:scale-110 active:scale-95",
+      "w-16 h-16 rounded-full shadow-md flex items-center justify-center hover:shadow-2xl hover:shadow-black/40 transition-all duration-300 ease-out p-0 ring-0 hover:scale-110 hover:-translate-y-1 active:scale-95 active:translate-y-0",
       !isOpen ? "!bg-transparent !border-0" : "",
       className,
     )}
