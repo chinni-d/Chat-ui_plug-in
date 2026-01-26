@@ -107,6 +107,7 @@ These options work for both the **React Component props** and the **HTML Widget 
 | `logoSrc` | `string` | `Default Logo` | URL for the chatbot avatar. |
 | `soundSrc` | `string` | `Default Sound` | URL for the notification sound. |
 | `theme` | `"light" \| "dark"` | `"light"` | Color theme of the interface. |
+| `position` | `"right" \| "left"` | `"right"` | Position of the chat widget on screen. |
 | `footerText` | `ReactNode` | `Default Footer` | Text to display in the footer. |
 
 ### React Example with Full Customization

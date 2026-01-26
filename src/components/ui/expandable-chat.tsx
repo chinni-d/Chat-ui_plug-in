@@ -83,15 +83,16 @@ const ExpandableChat: React.FC<ExpandableChatProps> = ({
         style={{
           "--chat-width": isMaximized ? "60vw" : sizeConfig[size].width,
           "--chat-height": isMaximized ? "90vh" : sizeConfig[size].height,
-          "--chat-right": isMaximized ? "20vw" : "1.25rem", // 1.25rem = right-5
-          "--chat-bottom": isMaximized ? "5vh" : "6rem",    // 6rem = bottom-24
-          transition: "width 0.4s ease-in-out, height 0.4s ease-in-out, right 0.4s ease-in-out, bottom 0.4s ease-in-out",
+          "--chat-offset": isMaximized ? "20vw" : "1.25rem",
+          "--chat-bottom": isMaximized ? "5vh" : "6rem",
+          transition: `width 0.4s ease-in-out, height 0.4s ease-in-out, ${position === "bottom-right" ? "right" : "left"} 0.4s ease-in-out, bottom 0.4s ease-in-out`,
         } as React.CSSProperties}
         className={cn(
           "flex flex-col bg-background sm:rounded-lg shadow-md overflow-hidden fixed inset-0 w-full h-full sm:inset-auto sm:left-auto sm:top-auto",
           chatConfig.chatPositions[position], 
           isOpen ? chatConfig.states.open : chatConfig.states.closed,
-          "sm:w-[var(--chat-width)] sm:h-[var(--chat-height)] sm:right-[var(--chat-right)] sm:bottom-[var(--chat-bottom)]",
+          "sm:w-[var(--chat-width)] sm:h-[var(--chat-height)] sm:bottom-[var(--chat-bottom)]",
+          position === "bottom-right" ? "sm:right-[var(--chat-offset)]" : "sm:left-[var(--chat-offset)]",
           "sm:!max-w-none sm:!max-h-none", // Always apply this to prevent any other max-w interference
           className,
         )}

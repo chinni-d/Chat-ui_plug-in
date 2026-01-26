@@ -43,9 +43,8 @@ export interface ChatUIProps {
   footerText?: React.ReactNode;
   inputPlaceholder?: string;
   theme?: "light" | "dark";
+  position?: "right" | "left";
 }
-
-
 
 export function ChatUI({
   endpoint,
@@ -61,6 +60,7 @@ export function ChatUI({
   ),
   inputPlaceholder = "Message",
   theme = "light",
+  position = "right",
 }: ChatUIProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -246,7 +246,10 @@ export function ChatUI({
     <div id="chat-ui-scope" className={cn("font-sans", theme === "dark" && "dark")}>
     <>
       {showNotification && !isChatOpen && (
-        <div className="fixed bottom-24 right-5 z-[9998] animate-in fade-in slide-in-from-bottom-5 duration-300">
+        <div className={cn(
+          "fixed bottom-24 z-[9998] animate-in fade-in slide-in-from-bottom-5 duration-300",
+          position === "right" ? "right-5" : "left-5"
+        )}>
           {/* Wrapper to position tail relative to the button */}
           <div className="relative">
             <MovingBorderButton
@@ -307,14 +310,17 @@ export function ChatUI({
               </div>
             </MovingBorderButton>
 
-            <div className="absolute -bottom-2 right-6 w-4 h-4 bg-background border-b border-r transform rotate-45 z-0"></div>
+            <div className={cn(
+              "absolute -bottom-2 w-4 h-4 bg-background border-b border-r transform rotate-45 z-0",
+              position === "right" ? "right-6" : "left-6"
+            )}></div>
           </div>
         </div>
       )}
 
       <ExpandableChat
         size="lg"
-        position="bottom-right"
+        position={position === "right" ? "bottom-right" : "bottom-left"}
         isOpen={isChatOpen}
         onOpenChange={setIsChatOpen}
         isMaximized={isMaximized}
