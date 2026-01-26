@@ -33,6 +33,7 @@ interface Message {
   content: string;
   createdAt?: string;
   feedback?: "up" | "down";
+  isStreaming?: boolean;
 }
 
 import { DEFAULT_LOGO, DEFAULT_SOUND } from "./assets";
@@ -205,6 +206,7 @@ export function ChatUI({
     
     // Create new AbortController
     abortControllerRef.current = new AbortController();
+    let currentBotMessageId: string | null = null;
 
     try {
       const historyForApi = currentHistory.map((msg) => ({
@@ -251,7 +253,9 @@ export function ChatUI({
             role: "assistant",
             content: aiResponse,
             createdAt: new Date().toISOString(),
+            isStreaming: true,
           };
+          currentBotMessageId = botMessageId;
           setMessages((prev) => [...prev, botMessage]);
         } else {
           // Update existing bot message
@@ -272,12 +276,33 @@ export function ChatUI({
         }
       }
 
+      // Mark streaming as finished for the bot message
+      if (currentBotMessageId) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === currentBotMessageId ? { ...msg, isStreaming: false } : msg
+          )
+        );
+      }
+
       // Play notification sound
       const audio = new Audio(soundSrc);
       audio
         .play()
         .catch((e) => console.error("Error playing notification sound:", e));
     } catch (error: any) {
+      // Ensure we turn off streaming if we hit an error
+      if (currentBotMessageId) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === currentBotMessageId ? { ...msg, isStreaming: false } : msg
+          )
+        );
+      } else if (abortControllerRef.current) {
+        // If we haven't created a message yet (error before first chunk)
+        // Nothing to update regarding isStreaming
+      }
+
       if (error.name === "AbortError") {
         console.log("Generation stopped by user");
         // Optional: Add a small indicator that it was stopped?
@@ -573,8 +598,9 @@ export function ChatUI({
                         </ChatBubbleMessage>
                         <div
                           className={cn(
-                            "flex items-center gap-1.5 px-1 select-none",
-                            message.role === "user" ? "flex-row" : "flex-row"
+                            "items-center gap-1.5 px-1 select-none",
+                            message.role === "user" ? "flex-row" : "flex-row",
+                            message.isStreaming ? "hidden" : "flex"
                           )}
                         >
                           <span className="text-[10px] text-muted-foreground whitespace-nowrap">
