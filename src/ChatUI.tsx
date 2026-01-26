@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, FormEvent, useEffect } from "react";
-import { Send, Sparkles, Loader2, User, RefreshCcw, X, Copy, CheckCheck, Check, Maximize2, Minimize2 } from "lucide-react";
+import { useState, FormEvent, useEffect, useRef } from "react";
+import { 
+  Send, Sparkles, User, RefreshCcw, X, Copy, CheckCheck, Check, 
+  Maximize2, Minimize2, Mic, MicOff, Square, ThumbsUp, ThumbsDown 
+} from "lucide-react";
 import { Button } from "./components/ui/button";
 import {
   ChatBubble,
@@ -29,6 +32,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   createdAt?: string;
+  feedback?: "up" | "down";
 }
 
 import { DEFAULT_LOGO, DEFAULT_SOUND } from "./assets";
@@ -80,6 +84,76 @@ export function ChatUI({
     setIsInitialized(true);
   }, []);
 
+  // -- Feature: Abort Controller for Stop Generation --
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // -- Feature: Voice Input --
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    if ("SpeechRecognition" in window || "webkitSpeechRecognition" in window) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+
+      recognitionRef.current.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setInput((prev) => prev ? `${prev} ${transcript}` : transcript);
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        console.error("Speech recognition error", event.error);
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
+    }
+  }, []);
+
+  const toggleVoiceInput = () => {
+    if (!recognitionRef.current) {
+      alert("Speech recognition is not supported in this browser.");
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+    } else {
+      recognitionRef.current.start();
+      setIsListening(true);
+    }
+  };
+
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsLoading(false);
+    }
+  };
+
+  // -- Feature: Feedback UI --
+  const handleFeedback = (messageId: string, type: "up" | "down") => {
+    setMessages((prev) => 
+      prev.map((msg) => {
+        if (msg.id === messageId) {
+          // Toggle: if clicking the same feedback type, remove it (deselect)
+          // Otherwise set to the new type
+          const newFeedback = msg.feedback === type ? undefined : type;
+          return { ...msg, feedback: newFeedback };
+        }
+        return msg;
+      })
+    );
+    // Ideally send this to backend
+    console.log(`Feedback ${type} for message ${messageId}`);
+  };
+
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
@@ -123,53 +197,32 @@ export function ChatUI({
     localStorage.removeItem("chat-history");
   };
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    const userQuestion = input.trim();
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: userQuestion,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Prepare history
-    const history = messages.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-    }));
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-
-    if (!endpoint) {
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content:
-          "Contact admin for api endpoint or check you have added correct endpoint or not contact developer at darapureddymanikanta8@gmail.com",
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-      return;
-    }
+  // Core logic to send message to API
+  const sendMessage = async (userText: string, currentHistory: Message[]) => {
+    if (!endpoint) return;
 
     setIsLoading(true);
+    
+    // Create new AbortController
+    abortControllerRef.current = new AbortController();
 
     try {
+      const historyForApi = currentHistory.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          query: userQuestion,
-          history: history,
+          query: userText,
+          history: historyForApi,
           stream: true,
         }),
+        signal: abortControllerRef.current.signal,
       });
 
       if (!response.body) {
@@ -191,7 +244,6 @@ export function ChatUI({
         if (isFirstChunk) {
           isFirstChunk = false;
           setIsLoading(false); // Hide "Thinking..." bubble
-
           // Add initial bot message
           const botMessageId = (Date.now() + 1).toString();
           const botMessage: Message = {
@@ -225,22 +277,61 @@ export function ChatUI({
       audio
         .play()
         .catch((e) => console.error("Error playing notification sound:", e));
-    } catch (error) {
-      console.error("Chat error:", error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 2).toString(),
-          role: "assistant",
-          content:
-            "I apologize, but I encountered an error. Please try again later.",
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+    } catch (error: any) {
+      if (error.name === "AbortError") {
+        console.log("Generation stopped by user");
+        // Optional: Add a small indicator that it was stopped?
+      } else {
+        console.error("Chat error:", error);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 2).toString(),
+            role: "assistant",
+            content:
+              "I apologize, but I encountered an error. Please try again later.",
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+      }
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+
+    const userQuestion = input.trim();
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: userQuestion,
+      createdAt: new Date().toISOString(),
+    };
+
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+    setInput("");
+
+    if (!endpoint) {
+       const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content:
+          "Contact admin for api endpoint or check you have added correct endpoint or not contact developer at darapureddymanikanta8@gmail.com",
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      return;
+    }
+
+    await sendMessage(userQuestion, messages); 
+  };
+
+
 
   return (
     <div id="chat-ui-scope" className={cn("font-sans", theme === "dark" && "dark")}>
@@ -518,6 +609,44 @@ export function ChatUI({
                               <span className="sr-only">Copy</span>
                             </Button>
                           )}
+                          
+                          {/* Feedback & Regenerate Actions for Assistant */}
+                          {message.role === "assistant" && (
+                            <>
+                              <div className="flex items-center gap-1 border-l border-border/40 pl-1.5 ml-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className={cn(
+                                    "h-4 w-4 p-0 hover:bg-transparent transition-colors",
+                                    message.feedback === "up" 
+                                      ? "text-foreground" 
+                                      : "text-muted-foreground hover:text-foreground"
+                                  )}
+                                  onClick={() => handleFeedback(message.id, "up")}
+                                >
+                                  <ThumbsUp className={cn("h-3 w-3", message.feedback === "up" && "fill-current")} />
+                                  <span className="sr-only">Helpful</span>
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className={cn(
+                                    "h-4 w-4 p-0 hover:bg-transparent transition-colors",
+                                    message.feedback === "down" 
+                                      ? "text-foreground" 
+                                      : "text-muted-foreground hover:text-foreground"
+                                  )}
+                                  onClick={() => handleFeedback(message.id, "down")}
+                                >
+                                  <ThumbsDown className={cn("h-3 w-3", message.feedback === "down" && "fill-current")} />
+                                  <span className="sr-only">Not helpful</span>
+                                </Button>
+                              </div>
+                              
+                              {/* Regenerate option removed */}
+                            </>
+                          )}
                         </div>
                       </div>
                     </ChatBubble>
@@ -562,21 +691,40 @@ export function ChatUI({
             />
             <div className="flex items-center justify-between px-2 pb-1">
               <div className="flex items-center gap-2">
-                {/* Tools or other actions can go here */}
+                 <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn("h-6 w-6 rounded-full text-muted-foreground hover:text-primary transition-colors", isListening && "text-red-500 animate-pulse bg-red-500/10")}
+                    onClick={toggleVoiceInput}
+                  
+                  >
+                   {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                </Button>
               </div>
-              <Button
-                type="submit"
-                size="icon"
-                className="h-8 w-8 rounded-full transition-all duration-200"
-                disabled={!input.trim() || isLoading}
-              >
+              <div className="flex items-center gap-2">
                 {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="h-8 w-8 rounded-full bg-red-500 hover:bg-red-600 transition-all duration-200"
+                    onClick={handleStop}
+                  >
+                    <Square className="h-3 w-3 fill-current" />
+                    <span className="sr-only">Stop Generation</span>
+                  </Button>
                 ) : (
-                  <Send className="h-4 w-4" />
+                   <Button
+                    type="submit"
+                    size="icon"
+                    className="h-8 w-8 rounded-full transition-all duration-200"
+                    disabled={!input.trim()}
+                  >
+                    <Send className="h-4 w-4" />
+                    <span className="sr-only">Send</span>
+                  </Button>
                 )}
-                <span className="sr-only">Send</span>
-              </Button>
+               </div>
             </div>
           </form>
           <div className="mt-2 text-center flex flex-col items-center justify-center gap-0.5">

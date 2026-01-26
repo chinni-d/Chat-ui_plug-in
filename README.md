@@ -12,6 +12,8 @@ A modern, highly customizable, and responsive Chat UI component for React applic
 - **Responsive Design**: Works seamlessly on desktop and mobile configurations.
 - **Customizable**: Extensive options to match your brand's look and feel.
 - **Interactive**: Notifications, sound effects, and smooth animations.
+- **Voice Input**: Integrated speech-to-text for hands-free messaging.
+- **Smart Controls**: Stop generation and feedback system.
 
 ---
 
