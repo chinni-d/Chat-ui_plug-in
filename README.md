@@ -87,7 +87,7 @@ Initialize the widget with your configuration:
     welcomeMessage: 'Hello! How can we help you today?',
     description: 'We typically reply in a few minutes.',
     logoSrc: 'https://cdn-icons-png.flaticon.com/512/6134/6134346.png',
-    theme: 'light', // or 'dark'
+    theme: 'light', // 'dark' or 'auto'
     footerText: 'Powered by Custom RAG'
   });
 </script>
@@ -108,7 +108,7 @@ These options work for both the **React Component props** and the **HTML Widget 
 | `inputPlaceholder` | `string` | `"Message"` | Placeholder text for the input area. |
 | `logoSrc` | `string` | `Default Logo` | URL for the chatbot avatar. |
 | `soundSrc` | `string` | `Default Sound` | URL for the notification sound. |
-| `theme` | `"light" \| "dark"` | `"light"` | Color theme of the interface. |
+| `theme` | `"light" \| "dark" \| "auto"` | `"light"` | Color theme of the interface. |
 | `position` | `"right" \| "left"` | `"right"` | Position of the chat widget on screen. |
 | `footerText` | `ReactNode` | `Default Footer` | Text to display in the footer. |
 

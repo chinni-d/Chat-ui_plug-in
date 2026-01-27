@@ -47,7 +47,7 @@ export interface ChatUIProps {
   description?: string;
   footerText?: React.ReactNode;
   inputPlaceholder?: string;
-  theme?: "light" | "dark";
+  theme?: "light" | "dark" | "auto";
   position?: "right" | "left";
 }
 
@@ -72,6 +72,30 @@ export function ChatUI({
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  
+  // Theme management
+  const [activeTheme, setActiveTheme] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    if (theme === "auto") {
+      const checkParentTheme = () => {
+        const isDark = document.documentElement.classList.contains("dark");
+        setActiveTheme(isDark ? "dark" : "light");
+      };
+
+      checkParentTheme();
+
+      const observer = new MutationObserver(checkParentTheme);
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+
+      return () => observer.disconnect();
+    } else {
+      setActiveTheme(theme);
+    }
+  }, [theme]);
 
   useEffect(() => {
     const savedMessages = localStorage.getItem("chat-history");
@@ -402,7 +426,7 @@ export function ChatUI({
 
 
   return (
-    <div id="chat-ui-scope" className={cn("font-sans", theme === "dark" && "dark")}>
+    <div id="chat-ui-scope" className={cn("font-sans", activeTheme === "dark" && "dark")}>
     <>
       {showNotification && !isChatOpen && (
         <div className={cn(
@@ -599,7 +623,7 @@ export function ChatUI({
                             message.role === "user"
                               ? cn(
                                   "!px-3 !py-2 rounded-2xl border border-border/10 shadow-sm !text-[hsl(var(--chat-foreground))]",
-                                  theme === "dark" ? "!bg-white/10" : "!bg-black/5"
+                                  activeTheme === "dark" ? "!bg-white/10" : "!bg-black/5"
                                 )
                               : "!bg-transparent !text-[hsl(var(--chat-foreground))] !px-0 !py-0"
                           )}
