@@ -3,7 +3,8 @@
 import { useState, FormEvent, useEffect, useRef } from "react";
 import { 
   Send, Sparkles, User, RefreshCcw, X, Copy, CheckCheck, Check, 
-  Maximize2, Minimize2, Mic, MicOff, Square, ThumbsUp, ThumbsDown, Volume2, VolumeX, Pause 
+  Maximize2, Minimize2, Mic, MicOff, Square, ThumbsUp, ThumbsDown, Volume2, VolumeX, Pause,
+  Plus, MessageSquare, Trash2, MoreVertical, History, ArrowLeft
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import {
@@ -34,6 +35,14 @@ interface Message {
   createdAt?: string;
   feedback?: "up" | "down";
   isStreaming?: boolean;
+}
+
+interface ChatSession {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: number;
+
 }
 
 import { DEFAULT_LOGO, DEFAULT_SOUND } from "./assets";
@@ -97,17 +106,95 @@ export function ChatUI({
     }
   }, [theme]);
 
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string>("");
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Initialize sessions
   useEffect(() => {
-    const savedMessages = localStorage.getItem("chat-history");
-    if (savedMessages) {
+    const savedSessions = localStorage.getItem("chat-sessions");
+    const savedHistory = localStorage.getItem("chat-history"); // Legacy support
+
+    if (savedSessions) {
       try {
-        setMessages(JSON.parse(savedMessages));
+        const parsedSessions: ChatSession[] = JSON.parse(savedSessions);
+        setSessions(parsedSessions);
+        if (parsedSessions.length > 0) {
+          // Load most recent or first
+          const mostRecent = parsedSessions[0]; // Assuming prepended
+          setMessages(mostRecent.messages);
+          setCurrentSessionId(mostRecent.id);
+        } else {
+          startNewSession();
+        }
       } catch (e) {
-        console.error("Failed to parse chat history", e);
+        console.error("Failed to parse chat sessions", e);
+        startNewSession();
       }
+    } else if (savedHistory) {
+      // Migrate legacy history to first session
+      try {
+        const oldMessages: Message[] = JSON.parse(savedHistory);
+        const newSessionId = Date.now().toString();
+        const newSession: ChatSession = {
+          id: newSessionId,
+          title: oldMessages.length > 0 ? (oldMessages[0].content.slice(0, 30) + "...") : "Previous Chat",
+          messages: oldMessages,
+          createdAt: Date.now(),
+        };
+        setSessions([newSession]);
+        setMessages(oldMessages);
+        setCurrentSessionId(newSessionId);
+        localStorage.setItem("chat-sessions", JSON.stringify([newSession]));
+        localStorage.removeItem("chat-history");
+      } catch (e) {
+        startNewSession();
+      }
+    } else {
+      startNewSession();
     }
     setIsInitialized(true);
   }, []);
+
+  const startNewSession = () => {
+    const newId = Date.now().toString();
+    setCurrentSessionId(newId);
+    setMessages([]);
+    // We don't necessarily add it to sessions list until it has messages, or we can add it immediately.
+    // Let's add it immediately to track state, but maybe filter empty ones later?
+    // Actually, let's just set ID and empty messages. We will save to sessions array in the effect when messages change.
+  };
+
+  const handleNewChat = () => {
+    // Save current if not empty (handled by effect, but let's ensure immediate UI feedback)
+    if (messages.length > 0) {
+        // Logic handled by the effect listening to 'messages'
+    }
+    startNewSession();
+    setShowHistory(false);
+  };
+
+  const handleDeleteSession = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const updatedSessions = sessions.filter(s => s.id !== id);
+    setSessions(updatedSessions);
+    localStorage.setItem("chat-sessions", JSON.stringify(updatedSessions));
+    
+    if (id === currentSessionId) {
+      if (updatedSessions.length > 0) {
+        loadSession(updatedSessions[0]);
+      } else {
+        startNewSession();
+      }
+    }
+  };
+
+  const loadSession = (session: ChatSession) => {
+    setCurrentSessionId(session.id);
+    setMessages(session.messages);
+    setShowHistory(false);
+  };
+
 
   // -- Feature: Abort Controller for Stop Generation --
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -187,6 +274,8 @@ export function ChatUI({
   // -- Feature: Text-to-Speech (TTS) --
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const speakMessage = (text: string, messageId: string) => {
     if (!window.speechSynthesis) return;
@@ -225,8 +314,13 @@ export function ChatUI({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (!isDismissed && !isChatOpen) {
+      // Check if we've already shown the notification in this session
+      const hasShownNotification = sessionStorage.getItem("chat_notification_shown");
+      
+      if (!isDismissed && !isChatOpen && !hasShownNotification) {
         setShowNotification(true);
+        sessionStorage.setItem("chat_notification_shown", "true");
+        
         if (!isAudioMuted) {
           const audio = new Audio(soundSrc);
           audio.play().catch((error) => {
@@ -238,12 +332,14 @@ export function ChatUI({
       }
     }, 2000);
     return () => clearTimeout(timer);
-  }, [isChatOpen, isDismissed, soundSrc]);
+  }, [isChatOpen, isDismissed, soundSrc, isAudioMuted]);
 
   useEffect(() => {
     if (isChatOpen) {
       setShowNotification(false);
       setIsDismissed(true);
+      // Mark as shown if the user opens the chat manually
+      sessionStorage.setItem("chat_notification_shown", "true");
     }
   }, [isChatOpen]);
 
@@ -253,14 +349,55 @@ export function ChatUI({
   };
 
   useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem("chat-history", JSON.stringify(messages));
+    if (isInitialized && currentSessionId) {
+      setSessions(prev => {
+        const existingIndex = prev.findIndex(s => s.id === currentSessionId);
+        
+        let newTitle = "New Chat";
+        if (messages.length > 0) {
+           newTitle = messages[0].content.slice(0, 30);
+           if (messages[0].content.length > 30) newTitle += "...";
+        }
+
+        const updatedSession: ChatSession = {
+            id: currentSessionId,
+            title: existingIndex !== -1 ? (messages.length > 0 ? newTitle : prev[existingIndex].title) : newTitle,
+            messages: messages,
+            createdAt: existingIndex !== -1 ? prev[existingIndex].createdAt : Date.now(),
+        };
+
+        let newSessions;
+        if (existingIndex !== -1) {
+            newSessions = [...prev];
+            newSessions[existingIndex] = updatedSession;
+        } else {
+            // Only add if there are messages or it's the active one we are building
+            if (messages.length > 0) {
+                newSessions = [updatedSession, ...prev];
+            } else {
+                return prev;
+            }
+        }
+        
+        localStorage.setItem("chat-sessions", JSON.stringify(newSessions));
+        return newSessions;
+      });
     }
-  }, [messages, isInitialized]);
+  }, [messages, isInitialized, currentSessionId]);
 
   const handleReset = () => {
+    setIsResetDialogOpen(true);
+  };
+
+  const confirmReset = () => {
     setMessages([]);
-    localStorage.removeItem("chat-history");
+    // Update the session in storage to be empty
+    setSessions(prev => {
+        const updated = prev.map(s => s.id === currentSessionId ? { ...s, messages: [] } : s);
+        localStorage.setItem("chat-sessions", JSON.stringify(updated));
+        return updated;
+    });
+    setIsResetDialogOpen(false);
   };
 
   // Core logic to send message to API
@@ -446,10 +583,10 @@ export function ChatUI({
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute top-3 right-3 h-6 w-6 text-muted-foreground hover:text-foreground z-10"
+                className="absolute top-3 right-3 h-8 w-8 text-muted-foreground hover:text-foreground z-10"
                 onClick={handleDismissNotification}
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
                 <span className="sr-only">Close</span>
               </Button>
 
@@ -507,6 +644,7 @@ export function ChatUI({
         isOpen={isChatOpen}
         onOpenChange={setIsChatOpen}
         isMaximized={isMaximized}
+        className="border-none"
         icon={
           <div className="relative h-full w-full overflow-hidden rounded-full">
             <img
@@ -517,64 +655,239 @@ export function ChatUI({
           </div>
         }
       >
-        <ExpandableChatHeader className="bg-muted/40 flex-col text-center justify-center border-b p-4 relative">
-          <h1 className="text-xl font-semibold flex items-center justify-center gap-2">
-            <div className="h-8 w-8 rounded-full overflow-hidden shrink-0 border border-border/50">
-              <img src={logoSrc} alt="Bot" className="h-full w-full object-cover" />
+        {mobileMenuOpen && (
+          <>
+            <div 
+              className="absolute inset-0 z-[9998]" 
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <div className="absolute top-[70px] right-4 w-48 rounded-lg bg-popover text-popover-foreground shadow-xl border border-border/50 z-[9999] p-1 flex flex-col animate-in fade-in zoom-in-95 duration-200">
+               <button
+                  className="w-full text-left px-3 py-3 text-sm hover:bg-muted text-foreground transition-colors flex items-center gap-3 rounded-md"
+                  onClick={() => {
+                    setShowHistory(!showHistory);
+                    setMobileMenuOpen(false);
+                  }}
+               >
+                 <div className="w-4 h-4 flex items-center justify-center shrink-0">
+                   {showHistory ? (
+                     <ArrowLeft className="h-4 w-4" />
+                   ) : (
+                     <History className="h-4 w-4" />
+                   )}
+                 </div>
+                 <span className="font-medium whitespace-nowrap">
+                   {showHistory ? "Back to Chat" : "Start New Chat"}
+                 </span>
+               </button>
+
+               <button
+                  className="w-full text-left px-3 py-3 text-sm hover:bg-muted text-foreground transition-colors flex items-center gap-3 rounded-md"
+                  onClick={() => {
+                    if (!isAudioMuted) {
+                      window.speechSynthesis.cancel();
+                      setSpeakingMessageId(null);
+                    }
+                    setIsAudioMuted(!isAudioMuted);
+                    setMobileMenuOpen(false);
+                  }}
+               >
+                  <div className="w-4 h-4 flex items-center justify-center shrink-0">
+                    {isAudioMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                  </div>
+                  <span className="font-medium whitespace-nowrap">
+                    {isAudioMuted ? "Unmute" : "Mute"}
+                  </span>
+               </button>
+
+               <button
+                  className="w-full text-left px-3 py-3 text-sm hover:bg-muted text-foreground transition-colors flex items-center gap-3 rounded-md"
+                  onClick={() => {
+                    handleReset();
+                    setMobileMenuOpen(false);
+                  }}
+               >
+                  <div className="w-4 h-4 flex items-center justify-center shrink-0">
+                    <RefreshCcw className="h-4 w-4" />
+                  </div>
+                  <span className="font-medium whitespace-nowrap">Reset Chat</span>
+               </button>
             </div>
-            {title}
-            <Sparkles className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-          </h1>
-          <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5 pt-1">
-            <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
-            Online and ready to help
-          </p>
-          <div className="absolute top-3 left-3 flex items-center gap-1 sm:top-5 sm:right-5 sm:left-auto">
-            <Tooltip text={isAudioMuted ? "Unmute Audio" : "Mute Audio"}>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hidden sm:flex h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                onClick={() => {
-                  if (!isAudioMuted) {
-                    window.speechSynthesis.cancel();
-                    setSpeakingMessageId(null);
-                  }
-                  setIsAudioMuted(!isAudioMuted);
-                }}
-              >
-                {isAudioMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-              </Button>
-            </Tooltip>
-             <Tooltip text={isMaximized ? "Minimize" : "Maximize"}>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hidden sm:flex h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                onClick={() => setIsMaximized(!isMaximized)}
-              >
-                {isMaximized ? (
-                  <Minimize2 className="h-4 w-4" />
-                ) : (
-                  <Maximize2 className="h-4 w-4" />
-                )}
-              </Button>
-            </Tooltip>
-            <Tooltip text="Reset Chat">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="group h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                onClick={handleReset}
-              >
-                <RefreshCcw className="h-4 w-4 group-hover:animate-[spin_1s_linear_1]" />
-              </Button>
-            </Tooltip>
+          </>
+        )}
+        <ExpandableChatHeader 
+          className="flex-col justify-center relative !border-b-0 !p-0 pb-6 min-h-[110px] !bg-transparent"
+          style={{ borderBottom: "none" }}
+        >
+          <div 
+             className="absolute inset-0"
+             style={{ background: "linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)" }}
+          />
+            
+          <div className="relative z-10 flex flex-col p-5 pb-8 w-full">
+            <div className="flex items-center justify-between w-full mb-1">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full overflow-hidden shrink-0 ring-2 ring-white/30 shadow-sm">
+                  <img src={logoSrc} alt="Bot" className="h-full w-full object-cover bg-white" />
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold text-white flex items-center gap-1.5 drop-shadow-sm">
+                    {title}
+                    <Sparkles className="h-4 w-4 text-yellow-300 fill-yellow-300 animate-pulse" />
+                  </h1>
+                  <p className="text-xs text-blue-100/90 flex items-center gap-1.5 font-medium">
+                    <span className="flex h-2 w-2 rounded-full bg-green-400 shadow-[0_0_4px_rgba(74,222,128,0.6)] animate-pulse"></span>
+                    Online and ready to help
+                  </p>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-0.5 mr-9 sm:mr-1">
+                {/* Desktop Actions */}
+                <div className="hidden sm:flex items-center gap-0.5">
+                  <Tooltip text={showHistory ? "Back to Chat" : "Start New Chat"} side="top">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-8 w-8 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors",
+                         showHistory && "bg-white/20 text-white"
+                      )}
+                      onClick={() => setShowHistory(!showHistory)}
+                    >
+                      <Plus className={cn("h-4 w-4 transition-transform duration-200", showHistory && "rotate-45")} />
+                    </Button>
+                  </Tooltip>
+                   <Tooltip text={isAudioMuted ? "Unmute" : "Mute"} side="top">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                      onClick={() => {
+                        if (!isAudioMuted) {
+                          window.speechSynthesis.cancel();
+                          setSpeakingMessageId(null);
+                        }
+                        setIsAudioMuted(!isAudioMuted);
+                      }}
+                    >
+                      {isAudioMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                    </Button>
+                  </Tooltip>
+                   <Tooltip text={isMaximized ? "Minimize" : "Maximize"} side="top">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                      onClick={() => setIsMaximized(!isMaximized)}
+                    >
+                      {isMaximized ? (
+                        <Minimize2 className="h-4 w-4" />
+                      ) : (
+                        <Maximize2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </Tooltip>
+                  <Tooltip text="Reset Chat" side="top">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors group"
+                      onClick={handleReset}
+                    >
+                      <RefreshCcw className="h-4 w-4 group-hover:animate-[spin_1s_linear_1]" />
+                    </Button>
+                  </Tooltip>
+                </div>
+
+                {/* Mobile Menu Trigger */}
+                <div className="flex sm:hidden relative">
+                   <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                      onClick={() => setMobileMenuOpen(true)}
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Wave SVG */}
+          <div className="absolute -bottom-[1px] left-0 w-full leading-[0] z-20">
+            <svg
+              className="w-full h-8 sm:h-12 text-background fill-current"
+              viewBox="0 0 1440 320"
+              preserveAspectRatio="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M0,96L48,112C96,128,192,160,288,160C384,160,480,128,576,112C672,96,768,96,864,112C960,128,1056,160,1152,160C1248,160,1344,128,1392,112L1440,96L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"
+              ></path>
+            </svg>
           </div>
         </ExpandableChatHeader>
 
-        <ExpandableChatBody className="bg-background/50 bg-[radial-gradient(hsl(var(--chat-border))_1px,transparent_1px)] [background-size:16px_16px]">
-          {messages.length === 0 ? (
+        <ExpandableChatBody className="bg-background">
+          {showHistory ? (
+             <div className="flex flex-col w-full h-full overflow-y-auto p-4 gap-2 animate-in fade-in duration-300">
+               <div className="flex items-center justify-between mb-2 px-1">
+                 <h3 className="text-sm font-semibold text-muted-foreground">Previous Chats</h3>
+                 <span className="text-xs text-muted-foreground/60">{sessions.length} saved</span>
+               </div>
+               
+               {sessions.length === 0 ? (
+                 <div className="text-center py-10 text-muted-foreground text-sm flex flex-col items-center gap-2">
+                   <MessageSquare className="h-8 w-8 opacity-20" />
+                   <p>No chat history yet.</p>
+                 </div>
+               ) : (
+                 sessions.map((session) => (
+                   <div 
+                     key={session.id}
+                     className={cn(
+                       "flex items-center justify-between p-3 rounded-lg border transition-all duration-200 cursor-pointer group",
+                       currentSessionId === session.id
+                         ? "bg-muted border-primary/20 shadow-sm"
+                         : "bg-card hover:bg-accent/50 border-transparent hover:border-border/50"
+                     )}
+                     onClick={() => loadSession(session)}
+                   >
+                      <div className="flex flex-col gap-1 overflow-hidden">
+                        <span className={cn(
+                          "text-sm font-medium truncate pr-2",
+                          currentSessionId === session.id ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
+                        )}>
+                          {session.title || "New Chat"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/60">
+                           {new Date(session.createdAt).toLocaleDateString()} • {new Date(session.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost" 
+                        size="icon"
+                        className="h-7 w-7 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                        onClick={(e) => handleDeleteSession(e, session.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                   </div>
+                 ))
+               )}
+               
+               <Button 
+                 className="mt-4 w-full" 
+                 variant="outline" 
+                 onClick={handleNewChat}
+               >
+                 <Plus className="h-4 w-4 mr-2" /> Start New Chat
+               </Button>
+             </div>
+          ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full p-6 text-center animate-in fade-in duration-500">
               <div className="bg-background rounded-full p-4 mb-6 shadow-md ring-1 ring-border/50">
                 <div className="relative w-16 h-16 overflow-hidden rounded-full">
@@ -602,7 +915,7 @@ export function ChatUI({
 
                     <ChatBubble
                       variant={message.role === "user" ? "sent" : "received"}
-                      className={cn(isMaximized && "gap-4")}
+                      className={cn("gap-3", isMaximized && "gap-4")}
                     >
                       <ChatBubbleAvatar
                         className="h-8 w-8 shrink-0"
@@ -854,6 +1167,33 @@ export function ChatUI({
             </span>
           </div>
         </ExpandableChatFooter>
+        
+        {isResetDialogOpen && (
+          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-lg p-6 animate-in fade-in duration-200">
+            <div className="bg-background border rounded-xl shadow-xl p-6 w-full max-w-sm flex flex-col gap-4 relative animate-in zoom-in-95 duration-200">
+              <div className="flex flex-col gap-1">
+                <h3 className="text-lg font-semibold text-foreground">Reset Chat?</h3>
+                <p className="text-sm text-muted-foreground">
+                  This will clear your current conversation history. Are you sure you want to proceed?
+                </p>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsResetDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={confirmReset}
+                >
+                  Reset
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </ExpandableChat>
     </>
     </div>

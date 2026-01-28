@@ -88,7 +88,7 @@ const ExpandableChat: React.FC<ExpandableChatProps> = ({
           transition: `width 0.4s ease-in-out, height 0.4s ease-in-out, ${position === "bottom-right" ? "right" : "left"} 0.4s ease-in-out, bottom 0.4s ease-in-out`,
         } as React.CSSProperties}
         className={cn(
-          "flex flex-col bg-background sm:rounded-lg shadow-md overflow-hidden fixed inset-0 w-full h-full sm:inset-auto sm:left-auto sm:top-auto",
+          "flex flex-col bg-background sm:rounded-lg shadow-2xl border border-border overflow-hidden fixed inset-0 w-full h-full sm:inset-auto sm:left-auto sm:top-auto",
           chatConfig.chatPositions[position], 
           isOpen ? chatConfig.states.open : chatConfig.states.closed,
           "sm:w-[var(--chat-width)] sm:h-[var(--chat-height)] sm:bottom-[var(--chat-bottom)]",
@@ -101,10 +101,10 @@ const ExpandableChat: React.FC<ExpandableChatProps> = ({
         <Button
           variant="ghost"
           size="icon"
-          className="absolute top-2 right-2 sm:hidden"
+          className="absolute top-2 right-2 sm:hidden z-50 text-white hover:bg-white/10"
           onClick={toggleChat}
         >
-          <X className="h-4 w-4" />
+          <X className="h-6 w-6" />
         </Button>
       </div>
       <ExpandableChatToggle
@@ -162,16 +162,16 @@ const ExpandableChatToggle: React.FC<ExpandableChatToggleProps> = ({
     variant="default"
     onClick={toggleChat}
     className={cn(
-      "w-16 h-16 rounded-full shadow-md flex items-center justify-center hover:shadow-2xl hover:shadow-black/40 transition-all duration-300 ease-out p-0 ring-0 hover:scale-110 hover:-translate-y-1 active:scale-95 active:translate-y-0",
-      !isOpen ? "!bg-transparent !border-0" : "",
+      "w-14 h-14 rounded-full shadow-md flex items-center justify-center p-0 bg-blue-500 hover:bg-blue-600 text-white border-0 hover:shadow-[0_0_0_4px_#bfdbfe]",
+      !isOpen ? "!bg-transparent" : "",
       className,
     )}
     {...props}
   >
     {isOpen ? (
-      <X className="h-6 w-6" />
+      <X className="size-7 stroke-[2.5]" />
     ) : (
-      icon || <MessageCircle className="h-6 w-6" />
+      icon || <MessageCircle className="size-7 stroke-[2.5]" />
     )}
   </Button>
 );
